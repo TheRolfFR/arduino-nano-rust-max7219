@@ -1,4 +1,4 @@
-arduino-nano-rust
+arduino-nano-rust-max7219
 =================
 
 Rust project for the _Arduino Nano_.
@@ -8,7 +8,7 @@ Rust project for the _Arduino Nano_.
 
 2. Run `cargo build` to build the firmware.
 
-3. Run `cargo run` to flash the firmware to a connected board.  If `ravedude`
+3. Run `cargo run -- -P COM8` to flash the firmware to a connected board.  If `ravedude`
    fails to detect your board, check its documentation at
    <https://crates.io/crates/ravedude>.
 
