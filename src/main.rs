@@ -82,11 +82,25 @@ fn main() -> ! {
     let addr = 0;
     let disp_ref = &mut display;
     loop {
-        counter_demo(disp_ref, addr);
 
         led.set_state(state.into()).unwrap();
         state = !state;
         arduino_hal::delay_ms(1000);
+    }
+}
+
+#[allow(dead_code)]
+fn row_demo<CONNECTOR>(disp_ref: &mut MAX7219<CONNECTOR>, addr: usize)
+where
+    CONNECTOR: connectors::Connector,
+{
+    for i in 0..4 {
+        for shift in (0..=7).rev() {
+            let value = 1 << shift;
+            disp_ref.clear_display(addr).ok();
+            set_row(disp_ref, addr, i, value);
+            arduino_hal::delay_ms(450);
+        }
     }
 }
 
@@ -174,4 +188,16 @@ where
         v |= 0b10000000;
     }
     display.write_raw_byte(addr, opcode, v).ok();
+}
+
+fn set_row<CONNECTOR>(display: &mut MAX7219<CONNECTOR>, addr: usize, row: u8, value: u8)
+where
+    CONNECTOR: connectors::Connector,
+{
+    if row > 7 {
+        return;
+    }
+
+    let opcode = row + 1;
+    display.write_raw_byte(addr, opcode, value).ok();
 }
