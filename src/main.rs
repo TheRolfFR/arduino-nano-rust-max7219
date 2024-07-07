@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(generic_const_exprs)]
 
 #[allow(unused_imports)]
 use arduino_hal::prelude::*;
@@ -10,11 +11,8 @@ use max7219::*;
 
 use panic_halt as _;
 
-const NUMBERS: [u8; 10] = [
-    0b01111110,0b00110000,0b01101101,0b01111001,0b00110011,
-    0b01011011,0b01011111,0b01110000,0b01111111,0b01111011
-];
-
+mod led_control;
+use led_control::LedControl;
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -78,11 +76,15 @@ fn main() -> ! {
         Err(())
     }).unwrap();
 
+    let mut lc: LedControl<1,_> = LedControl::new(display);
+
     let mut state = true;
     let addr = 0;
-    let disp_ref = &mut display;
+    let lc_ref = &mut lc;
     loop {
-
+        row_demo(lc_ref, addr);
+        counter_demo(lc_ref, addr);
+        number_demo(lc_ref, addr);
         led.set_state(state.into()).unwrap();
         state = !state;
         arduino_hal::delay_ms(1000);
@@ -90,32 +92,34 @@ fn main() -> ! {
 }
 
 #[allow(dead_code)]
-fn row_demo<CONNECTOR>(disp_ref: &mut MAX7219<CONNECTOR>, addr: usize)
+fn row_demo<const N: usize, CONNECTOR>(lc_ref: &mut LedControl<N, CONNECTOR>, addr: usize)
 where
     CONNECTOR: connectors::Connector,
+    [(); 8 * N]:,
 {
     for i in 0..4 {
         for shift in (0..=7).rev() {
             let value = 1 << shift;
-            disp_ref.clear_display(addr).ok();
-            set_row(disp_ref, addr, i, value);
+            lc_ref.clear_display(addr).ok();
+            lc_ref.set_row(addr, i, value).ok();
             arduino_hal::delay_ms(450);
         }
     }
 }
 
 #[allow(dead_code)]
-fn counter_demo<CONNECTOR>(disp_ref: &mut MAX7219<CONNECTOR>, addr: usize)
+fn counter_demo<const N: usize, CONNECTOR>(lc_ref: &mut LedControl<N, CONNECTOR>, addr: usize)
 where
     CONNECTOR: connectors::Connector,
+    [(); 8 * N]:,
 {
     let step = 1; // divided by 10
     let demo_delay = 250;
 
-    set_digit(disp_ref, addr, 0, 0, false);
-    set_digit(disp_ref, addr, 1, 0, false);
-    set_digit(disp_ref, addr, 2, 0, false);
-    set_digit(disp_ref, addr, 3, 0, false);
+    lc_ref.set_digit(addr, 0, 0, false).ok();
+    lc_ref.set_digit(addr, 1, 0, false).ok();
+    lc_ref.set_digit(addr, 2, 0, false).ok();
+    lc_ref.set_digit(addr, 3, 0, false).ok();
     arduino_hal::delay_ms(demo_delay * 2);
 
     let mut int_part = 0usize;
@@ -127,25 +131,25 @@ where
             int_part-int_part/10*10
         ];
 
-        disp_ref.clear_display(addr).ok();
+        lc_ref.clear_display(addr).ok();
         let mut hide_zeros = true;
         if int_part == 0 {
-            set_digit(disp_ref, addr, 2, 0, true);
-            set_digit(disp_ref, addr, 3, dec_part, false);
+            lc_ref.set_digit(addr, 2, 0, true).ok();
+            lc_ref.set_digit(addr, 3, dec_part, false).ok();
         } else {
             for i in 0..=2 {
                 match (val_array[i], hide_zeros) {
                     (0, true) => {}
                     (_, true) => {
                         hide_zeros = false;
-                        set_digit(disp_ref, addr, i as u8, val_array[i], i == 2);
+                        lc_ref.set_digit(addr, i as u8, val_array[i], i == 2).ok();
                     },
                     (_, false) => {
-                        set_digit(disp_ref, addr, i as u8, val_array[i], i == 2);
+                        lc_ref.set_digit(addr, i as u8, val_array[i], i == 2).ok();
                     }
                 };
             }
-            set_digit(disp_ref, addr, 3, dec_part, false);
+            lc_ref.set_digit(addr, 3, dec_part, false).ok();
         }
 
         dec_part += step;
@@ -157,47 +161,23 @@ where
     }
 }
 
+
 #[allow(dead_code)]
-fn number_demo<CONNECTOR>(display: &mut MAX7219<CONNECTOR>, addr: usize)
+fn number_demo<const N: usize, CONNECTOR>(lc_ref: &mut LedControl<N, CONNECTOR>, addr: usize)
 where
     CONNECTOR: connectors::Connector,
+    [(); 8 * N]:,
 {
-    set_digit(display, addr, 0, 0, false);
-    set_digit(display, addr, 1, 0, false);
-    set_digit(display, addr, 2, 0, false);
-    set_digit(display, addr, 3, 0, false);
+    lc_ref.set_digit(addr, 0, 0, false).ok();
+    lc_ref.set_digit(addr, 1, 0, false).ok();
+    lc_ref.set_digit(addr, 2, 0, false).ok();
+    lc_ref.set_digit(addr, 3, 0, false).ok();
     arduino_hal::delay_ms(300);
 
     for digit in 0..=3 {
         for value in 1..=9 {
-            set_digit(display, addr, 3-digit, value, false);
+            lc_ref.set_digit(addr, 3-digit, value, false).ok();
             arduino_hal::delay_ms(300);
         }
     }
-}
-
-fn set_digit<CONNECTOR>(display: &mut MAX7219<CONNECTOR>, addr: usize, digit: u8, value: usize, dp: bool)
-where
-    CONNECTOR: connectors::Connector,
-{
-    display.set_decode_mode(0, DecodeMode::NoDecode).ok();
-
-    let opcode = digit + 1;
-    let mut v = NUMBERS[value];
-    if dp {
-        v |= 0b10000000;
-    }
-    display.write_raw_byte(addr, opcode, v).ok();
-}
-
-fn set_row<CONNECTOR>(display: &mut MAX7219<CONNECTOR>, addr: usize, row: u8, value: u8)
-where
-    CONNECTOR: connectors::Connector,
-{
-    if row > 7 {
-        return;
-    }
-
-    let opcode = row + 1;
-    display.write_raw_byte(addr, opcode, value).ok();
 }
