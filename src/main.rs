@@ -82,12 +82,30 @@ fn main() -> ! {
     let addr = 0;
     let lc_ref = &mut lc;
     loop {
-        row_demo(lc_ref, addr);
-        counter_demo(lc_ref, addr);
-        number_demo(lc_ref, addr);
+        col_demo(lc_ref, addr);
+        // row_demo(lc_ref, addr);
+        // counter_demo(lc_ref, addr);
+        // number_demo(lc_ref, addr);
         led.set_state(state.into()).unwrap();
         state = !state;
         arduino_hal::delay_ms(1000);
+    }
+}
+
+
+#[allow(dead_code)]
+fn col_demo<const N: usize, CONNECTOR>(lc_ref: &mut LedControl<N, CONNECTOR>, addr: usize)
+where
+    CONNECTOR: connectors::Connector,
+    [(); 8 * N]:,
+{
+    for i in 0..=7 {
+        for shift in (4..=7).rev() {
+            let value = 1 << shift;
+            lc_ref.clear_display(addr).ok();
+            lc_ref.set_column(addr, i, value).ok();
+            arduino_hal::delay_ms(450);
+        }
     }
 }
 
