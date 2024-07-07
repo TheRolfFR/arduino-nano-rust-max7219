@@ -80,39 +80,9 @@ fn main() -> ! {
 
     let mut state = true;
     let addr = 0;
+    let disp_ref = &mut display;
     loop {
-        set_digit(&mut display, addr, 0, 0, false);
-        set_digit(&mut display, addr, 1, 0, false);
-        set_digit(&mut display, addr, 2, 0, false);
-        set_digit(&mut display, addr, 3, 0, false);
-        arduino_hal::delay_ms(450);
-
-        for i in 0usize..=9999 {
-            let mut dp_array: [bool; 4] = [false; 4];
-            let val_array: [usize; 4] = [
-                i/1000,
-                (i/100*100-i/1000*1000)/100,
-                (i/10*10-i/100*100)/10,
-                i-i/10*10
-            ];
-
-            let mut val = i;
-            let mut index = 0usize;
-            while val > 10 {
-                val = val / 10;
-                index = index + 1;
-            }
-            dp_array[index] = true;
-
-            println!("{} => {:?}, {:?}", i, val_array, dp_array);
-
-            for i in 0usize..=3 {
-                set_digit(&mut display, addr, i as u8, val_array[i], dp_array[i]);
-            }
-
-
-            arduino_hal::delay_ms(250);
-        }
+        counter_demo(disp_ref, addr);
 
         led.set_state(state.into()).unwrap();
         state = !state;
@@ -120,6 +90,60 @@ fn main() -> ! {
     }
 }
 
+#[allow(dead_code)]
+fn counter_demo<CONNECTOR>(disp_ref: &mut MAX7219<CONNECTOR>, addr: usize)
+where
+    CONNECTOR: connectors::Connector,
+{
+    let step = 1; // divided by 10
+    let demo_delay = 250;
+
+    set_digit(disp_ref, addr, 0, 0, false);
+    set_digit(disp_ref, addr, 1, 0, false);
+    set_digit(disp_ref, addr, 2, 0, false);
+    set_digit(disp_ref, addr, 3, 0, false);
+    arduino_hal::delay_ms(demo_delay * 2);
+
+    let mut int_part = 0usize;
+    let mut dec_part = 0usize;
+    while int_part != 1000 {
+        let val_array: [usize; 3] = [
+            (int_part/100*100-int_part/1000*1000)/100,
+            (int_part/10*10-int_part/100*100)/10,
+            int_part-int_part/10*10
+        ];
+
+        disp_ref.clear_display(addr).ok();
+        let mut hide_zeros = true;
+        if int_part == 0 {
+            set_digit(disp_ref, addr, 2, 0, true);
+            set_digit(disp_ref, addr, 3, dec_part, false);
+        } else {
+            for i in 0..=2 {
+                match (val_array[i], hide_zeros) {
+                    (0, true) => {}
+                    (_, true) => {
+                        hide_zeros = false;
+                        set_digit(disp_ref, addr, i as u8, val_array[i], i == 2);
+                    },
+                    (_, false) => {
+                        set_digit(disp_ref, addr, i as u8, val_array[i], i == 2);
+                    }
+                };
+            }
+            set_digit(disp_ref, addr, 3, dec_part, false);
+        }
+
+        dec_part += step;
+        if dec_part >= 10 {
+            int_part += dec_part / 10;
+            dec_part = dec_part % 10;
+        }
+        arduino_hal::delay_ms(demo_delay);
+    }
+}
+
+#[allow(dead_code)]
 fn number_demo<CONNECTOR>(display: &mut MAX7219<CONNECTOR>, addr: usize)
 where
     CONNECTOR: connectors::Connector,
